@@ -21,18 +21,25 @@ def parse_message(text: str):
         transaction_type = "Gasto"
         text = text[5:].strip()
 
-    # Tenta encontrar o valor (número) no final ou no meio
+    # Tenta encontrar todos os números na mensagem
     # Regex para encontrar números (inteiros ou decimais com ponto ou vírgula)
-    match = re.search(r"(\d+([.,]\d+)?)", text)
+    matches = list(re.finditer(r"(\d+([.,]\d+)?)", text))
     
-    if not match:
+    if not matches:
         return None
     
-    value_str = match.group(1).replace(",", ".")
+    # Assume que o último número encontrado é o valor da transação
+    last_match = matches[-1]
+    value_str = last_match.group(1).replace(",", ".")
     value = float(value_str)
     
-    # A descrição é o que sobra tirando o valor
-    description = text.replace(match.group(1), "").strip()
+    # A descrição é o texto original removendo o valor encontrado
+    # Mas apenas a ocorrência específica do valor (o último match)
+    start, end = last_match.span()
+    description = (text[:start] + text[end:]).strip()
+    
+    # Remove espaços duplos que podem ter surgido
+    description = re.sub(r'\s+', ' ', description)
     
     # Se a descrição ficar vazia, tenta pegar do início
     if not description:
