@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Google Cloud & Credentials
+credentials.json
+.vscode/
+
+# Logs
+*.log
