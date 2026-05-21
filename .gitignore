@@ -13,3 +13,7 @@ credentials.json
 
 # Logs
 *.log
+
+# Project specific
+CLAUDE.md
+PROGRESSO.md
