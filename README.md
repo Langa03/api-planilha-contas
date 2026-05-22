@@ -1,60 +1,57 @@
-# API Financeira WhatsApp 🚀
+# API Financeira WhatsApp 🚀 (Meta API Version)
 
-Esta API permite registrar gastos e ganhos em uma planilha do Google Sheets diretamente pelo WhatsApp, utilizando Twilio como ponte.
-
-## 🛠️ Tecnologias
-- **Python 3.12**
-- **FastAPI** (Backend)
-- **Google Sheets API** (Armazenamento)
-- **Twilio WhatsApp API** (Interface)
+Esta API permite registrar gastos e ganhos em uma planilha do Google Sheets diretamente pelo WhatsApp, utilizando a **API Oficial da Meta (WhatsApp Cloud API)** para garantir um serviço gratuito e estável.
 
 ## 📋 Funcionalidades
-- **Fluxo Guiado (Chatbot):** O bot conversa com você para garantir que os dados caiam na coluna certa.
-- **Mapeamento de Planilha Mensal:** Identifica automaticamente o mês atual e as categorias disponíveis na sua planilha.
-- **Soma Inteligente:** Se você já registrou algo em "Gasolina" este mês, o novo valor será somado ao anterior automaticamente.
-- **Logging:** Acompanhamento detalhado das transações e erros.
+- **Fluxo Guiado (Chatbot):** O bot conversa com você (Valor -> Categoria -> Tipo) para garantir que os dados caiam na coluna certa.
+- **Mapeamento de Planilha Mensal:** Identifica automaticamente o mês atual (Linha) e as categorias disponíveis (Coluna na Linha 3).
+- **Soma Inteligente:** Valores registrados na mesma categoria e mês são somados automaticamente.
+- **Custo Zero:** Utiliza o plano gratuito do Render e as primeiras 1.000 mensagens mensais gratuitas da Meta.
 
 ## 💬 Como usar no WhatsApp
-1. **Envie o valor:** `50.00` ou `Almoço 35`.
-2. **Escolha a Categoria:** O bot enviará uma lista numerada baseada na sua planilha (ex: 1. Gasolina, 2. Moradia...). Digite o número ou o nome.
-3. **Escolha o Tipo:** Responda `Gasto` (diminui o total) ou `Ganho` (aumenta o total).
-4. **Pronto!** O valor será formatado como `R$ 50,00` e inserido na célula correta da sua planilha mensal.
+1. **Envie o valor:** Ex: `50.00` ou `Gasolina 150`.
+2. **Escolha a Categoria:** O bot enviará a lista baseada na sua planilha. Responda com o número ou nome.
+3. **Escolha o Tipo:** Responda `1` para Gasto (subtrai) ou `2` para Ganho (soma).
+4. **Confirmação:** O bot confirma o novo total daquela categoria no mês.
 
-1. **Instale as dependências:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+---
 
-2. **Configure o arquivo `.env`:**
-   Crie um arquivo `.env` na raiz com:
-   ```env
-   SPREADSHEET_ID=seu_id_da_planilha
-   GOOGLE_SHEETS_CREDENTIALS_PATH=credentials.json
-   ```
+## 🚀 Guia de Instalação e Configuração
 
-3. **Adicione as credenciais do Google:**
-   Coloque o arquivo `credentials.json` (Service Account) na raiz do projeto.
+### 1. Requisitos Prévios
+- Conta no [Meta for Developers](https://developers.facebook.com/).
+- Planilha Google com meses na Coluna A e categorias na Linha 3.
+- Conta no [Render.com](https://render.com/).
 
-4. **Inicie o servidor:**
-   ```bash
-   python src/app.py
-   ```
+### 2. Configuração da Planilha (Google Sheets)
+- Crie uma **Service Account** no Google Cloud Console.
+- Baixe o arquivo `credentials.json` e coloque-o na raiz do projeto.
+- Compartilhe sua planilha com o e-mail da Service Account (permissão de Editor).
 
-5. **Exponha a API (para teste com Twilio):**
-   ```bash
-   ngrok http 8000
-   ```
-   Configure o Webhook no Twilio Sandbox para: `https://<seu-link-ngrok>/whatsapp`.
+### 3. Configuração da API da Meta
+- Crie um App do tipo **Business**.
+- Configure o WhatsApp e pegue o `Phone Number ID` e o `Temporary Access Token`.
+- No menu **Configuration**, defina o Webhook:
+    - **Callback URL:** `https://seu-app.onrender.com/whatsapp`
+    - **Verify Token:** (O que você definiu no Render, ex: `api_contas_123`)
+- Em **Manage Webhook Fields**, assine o campo `messages`.
 
-## 🧪 Testes
-Para rodar os testes do parser:
-```bash
-python tests/test_parser.py
-```
+### 4. Configuração no Render.com
+Crie um **Web Service** conectado ao seu GitHub e configure as seguintes variáveis em **Environment**:
 
-## ☁️ Deploy no Render.com
-1. Conecte seu GitHub ao Render.
-2. Crie um **Web Service**.
-3. Configure as **Environment Variables** (`SPREADSHEET_ID`, etc.).
-4. Use o **Secret File** para o `credentials.json`.
-5. Start Command: `uvicorn src.app:app --host 0.0.0.0 --port $PORT`
+| Key | Descrição |
+| :--- | :--- |
+| `SPREADSHEET_ID` | O ID longo da sua planilha Google. |
+| `GOOGLE_SHEETS_CREDENTIALS_PATH` | `credentials.json` |
+| `WHATSAPP_PHONE_NUMBER_ID` | O ID do número que você pegou na Meta. |
+| `WHATSAPP_VERIFY_TOKEN` | A senha de verificação (ex: `api_contas_123`). |
+| `WHATSAPP_ACCESS_TOKEN` | O Token de acesso (temporário ou permanente) da Meta. |
+
+**Secret File:** Adicione um arquivo secreto chamado `credentials.json` com o conteúdo do seu arquivo local.
+
+---
+
+## 🛠️ Comandos Úteis
+- **Rodar Localmente:** `python src/app.py`
+- **Testar Webhook:** `ngrok http 8000` (Use o link do ngrok na Meta para testes rápidos).
+- **Testes de Lógica:** `python tests/test_parser.py`
