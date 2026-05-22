@@ -44,19 +44,36 @@ class SheetsClient:
         except Exception as e:
             raise RuntimeError(f"Falha na autenticação com o Google Sheets: {str(e)}")
 
-    def append_row(self, data, sheet_name=None):
+    def get_all_values(self, sheet_name=None):
+        spreadsheet = self.client.open_by_key(self.spreadsheet_id)
+        worksheet = spreadsheet.worksheet(sheet_name) if sheet_name else spreadsheet.get_worksheet(0)
+        return worksheet.get_all_values()
+
+    def update_cell_value(self, row, col, value, sheet_name=None):
         """
-        Adiciona uma linha na planilha.
-        data: lista de valores (ex: ["2023-10-27", "Almoço", "35.00", "Gasto"])
-        sheet_name: nome da aba (opcional)
+        Adiciona o valor ao conteúdo atual da célula.
         """
         spreadsheet = self.client.open_by_key(self.spreadsheet_id)
-        if sheet_name:
-            worksheet = spreadsheet.worksheet(sheet_name)
-        else:
-            worksheet = spreadsheet.get_worksheet(0)
+        worksheet = spreadsheet.worksheet(sheet_name) if sheet_name else spreadsheet.get_worksheet(0)
         
-        return worksheet.append_row(data)
+        current_val_str = worksheet.cell(row, col).value
+        
+        # Tenta converter o valor atual para float (removendo R$, etc)
+        current_val = 0.0
+        if current_val_str:
+            try:
+                # Remove R$, espaços e troca vírgula por ponto
+                clean_val = current_val_str.replace("R$", "").replace(".", "").replace(",", ".").strip()
+                current_val = float(clean_val)
+            except ValueError:
+                current_val = 0.0
+        
+        new_total = current_val + value
+        
+        # Formata de volta para o padrão da planilha (R$ XX,XX)
+        formatted_val = f"R${new_total:.2f}".replace(".", ",")
+        worksheet.update_cell(row, col, formatted_val)
+        return new_total
 
 if __name__ == "__main__":
     # Teste rápido se rodar o arquivo diretamente

@@ -9,12 +9,16 @@ Esta API permite registrar gastos e ganhos em uma planilha do Google Sheets dire
 - **Twilio WhatsApp API** (Interface)
 
 ## 📋 Funcionalidades
-- **Parser Inteligente:** Entende mensagens como "Lanche 25.50" ou "Ganho Venda 100".
-- **Registro Automático:** Adiciona data, descrição, valor e tipo (Gasto/Ganho) na planilha.
-- **Resposta Instantânea:** Confirma o registro via WhatsApp com os detalhes salvos.
+- **Fluxo Guiado (Chatbot):** O bot conversa com você para garantir que os dados caiam na coluna certa.
+- **Mapeamento de Planilha Mensal:** Identifica automaticamente o mês atual e as categorias disponíveis na sua planilha.
+- **Soma Inteligente:** Se você já registrou algo em "Gasolina" este mês, o novo valor será somado ao anterior automaticamente.
 - **Logging:** Acompanhamento detalhado das transações e erros.
 
-## 🚀 Como Rodar Localmente
+## 💬 Como usar no WhatsApp
+1. **Envie o valor:** `50.00` ou `Almoço 35`.
+2. **Escolha a Categoria:** O bot enviará uma lista numerada baseada na sua planilha (ex: 1. Gasolina, 2. Moradia...). Digite o número ou o nome.
+3. **Escolha o Tipo:** Responda `Gasto` (diminui o total) ou `Ganho` (aumenta o total).
+4. **Pronto!** O valor será formatado como `R$ 50,00` e inserido na célula correta da sua planilha mensal.
 
 1. **Instale as dependências:**
    ```bash
