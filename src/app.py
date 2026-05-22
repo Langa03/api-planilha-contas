@@ -106,19 +106,24 @@ def read_root():
     return {"status": "ok", "message": "API Financeira Meta está rodando!"}
 
 @app.get("/whatsapp")
-async def verify_webhook(
-    hub_mode: str = Query(None, alias="hub.mode"),
-    hub_challenge: str = Query(None, alias="hub.challenge"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token")
-):
+async def verify_webhook(request: Request):
     """
     Endpoint de verificação exigido pela Meta para configurar o Webhook.
+    Lê os parâmetros diretamente da URL para evitar erros de alias.
     """
+    params = request.query_params
+    hub_mode = params.get("hub.mode")
+    hub_verify_token = params.get("hub.verify_token")
+    hub_challenge = params.get("hub.challenge")
+
+    logger.info(f"Verificando Webhook: mode={hub_mode}, token={hub_verify_token}")
+    logger.info(f"Token esperado (env): {VERIFY_TOKEN}")
+
     if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         logger.info("Webhook verificado com sucesso!")
         return Response(content=hub_challenge)
     
-    logger.warning("Falha na verificação do Webhook.")
+    logger.warning(f"Falha na verificação. Recebido: {hub_verify_token}, Esperado: {VERIFY_TOKEN}")
     return Response(content="Verificação falhou", status_code=403)
 
 @app.post("/whatsapp")
