@@ -94,17 +94,25 @@ def get_sheet_layout():
             logger.warning("Planilha vazia ou não acessível.")
             return None, None
         
-        # Log para depuração
-        logger.info(f"Dados lidos da planilha (primeiras 2 linhas): {data[:2]}")
+        # Log para depuração profunda
+        logger.info(f"Dados lidos da planilha (primeiras 3 linhas): {data[:3]}")
         
-        # Na imagem, a linha 1 tem os cabeçalhos das categorias.
-        # A coluna A (index 0) parece estar vazia ou conter os meses a partir da linha 2.
-        headers = [h.strip().upper() for h in data[0]]
+        # Na sua planilha, a Linha 1 parece ser um título ('Despesas').
+        # As categorias reais (Moradia, Gasolina...) devem estar na Linha 2.
+        headers = [h.strip().upper() for h in data[1]] # Tenta a segunda linha
         
-        # Os meses estão na coluna A (index 0), a partir da linha 2.
+        # Se a segunda linha também estiver vazia, tenta a primeira por desencargo
+        if not any(h for h in headers if h and h not in ["TOTAL", "MESES", "DESPESAS", ""]):
+            headers = [h.strip().upper() for h in data[0]]
+
+        # Os meses estão na coluna A (index 0).
+        # Vamos filtrar para pegar apenas os nomes dos meses reais.
+        valid_months = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+                        "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
+        
         months = []
-        for row in data[1:]:
-            if row and row[0].strip():
+        for row in data:
+            if row and row[0].strip().upper() in valid_months:
                 months.append(row[0].strip().upper())
         
         logger.info(f"Cabeçalhos identificados: {headers}")
@@ -130,24 +138,29 @@ async def whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
             if not parsed:
                 reply = "Olá! Para começar, envie o valor que deseja registrar (ex: 50 ou 150.50)."
             else:
-                headers, _ = get_sheet_layout()
+                headers, months = get_sheet_layout()
                 if not headers:
                     raise Exception("Não foi possível carregar as categorias da planilha. Verifique as permissões.")
                 
                 # Categorias válidas:
-                # Na imagem, MORADIA é a primeira categoria real (provavelmente coluna B, index 1)
-                # Vamos pegar tudo que não seja vazio, não seja "TOTAL" e não seja a primeira coluna de meses.
+                # Pegamos tudo que não seja vazio, não seja "TOTAL", não seja "MESES" e não seja a primeira coluna.
                 categories = []
                 for i, h in enumerate(headers):
-                    if h and h != "TOTAL" and h != "MESES" and i > 0:
+                    if h and h not in ["TOTAL", "MESES", "DESPESAS", ""] and i > 0:
                         categories.append(h)
                 
                 if not categories:
                     logger.warning(f"Nenhuma categoria encontrada nos headers: {headers}")
-                    reply = "Desculpe, não encontrei nenhuma categoria de gasto na sua planilha. Verifique a primeira linha."
+                    reply = "⚠️ Não encontrei as categorias na 2ª linha da sua planilha. Verifique se os nomes (Moradia, Gasolina...) estão lá."
                 else:
                     state_data["value"] = parsed["value"]
                     state_data["description"] = parsed["description"]
+                    state_data["state"] = AWAITING_CATEGORY
+                    state_data["categories"] = categories
+                    user_states[From] = state_data
+                    
+                    options = "\n".join([f"{i+1}. {cat}" for i, cat in enumerate(categories)])
+                    reply = f"💰 R$ {parsed['value']:.2f} ({parsed['description']})\n\nEscolha a **categoria**:\n\n{options}"
                     state_data["state"] = AWAITING_CATEGORY
                     state_data["categories"] = categories
                     user_states[From] = state_data
