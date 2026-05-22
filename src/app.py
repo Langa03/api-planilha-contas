@@ -91,10 +91,24 @@ def get_sheet_layout():
     try:
         data = sheets_client.get_all_values()
         if not data:
+            logger.warning("Planilha vazia ou não acessível.")
             return None, None
         
-        headers = [h.strip().upper() for h in data[0]] # Linha 1: Categorias
-        months = [row[0].strip().upper() for row in data[1:] if row] # Coluna A: Meses
+        # Log para depuração
+        logger.info(f"Dados lidos da planilha (primeiras 2 linhas): {data[:2]}")
+        
+        # Na imagem, a linha 1 tem os cabeçalhos das categorias.
+        # A coluna A (index 0) parece estar vazia ou conter os meses a partir da linha 2.
+        headers = [h.strip().upper() for h in data[0]]
+        
+        # Os meses estão na coluna A (index 0), a partir da linha 2.
+        months = []
+        for row in data[1:]:
+            if row and row[0].strip():
+                months.append(row[0].strip().upper())
+        
+        logger.info(f"Cabeçalhos identificados: {headers}")
+        logger.info(f"Meses identificados: {months}")
         
         return headers, months
     except Exception as e:
@@ -118,20 +132,28 @@ async def whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
             else:
                 headers, _ = get_sheet_layout()
                 if not headers:
-                    raise Exception("Não foi possível carregar as categorias da planilha.")
+                    raise Exception("Não foi possível carregar as categorias da planilha. Verifique as permissões.")
                 
-                # Categorias válidas (excluindo a primeira coluna de meses e a última de Total)
-                # Na imagem: MORADIA está na coluna B (index 1)
-                categories = [h for h in headers if h and h != "TOTAL" and h != "MESES" and headers.index(h) > 0]
+                # Categorias válidas:
+                # Na imagem, MORADIA é a primeira categoria real (provavelmente coluna B, index 1)
+                # Vamos pegar tudo que não seja vazio, não seja "TOTAL" e não seja a primeira coluna de meses.
+                categories = []
+                for i, h in enumerate(headers):
+                    if h and h != "TOTAL" and h != "MESES" and i > 0:
+                        categories.append(h)
                 
-                state_data["value"] = parsed["value"]
-                state_data["description"] = parsed["description"]
-                state_data["state"] = AWAITING_CATEGORY
-                state_data["categories"] = categories
-                user_states[From] = state_data
-                
-                options = "\n".join([f"{i+1}. {cat}" for i, cat in enumerate(categories)])
-                reply = f"Recebi R$ {parsed['value']:.2f} ({parsed['description']}).\nQual a **categoria**?\n\n{options}\n\n(Digite o número ou o nome)"
+                if not categories:
+                    logger.warning(f"Nenhuma categoria encontrada nos headers: {headers}")
+                    reply = "Desculpe, não encontrei nenhuma categoria de gasto na sua planilha. Verifique a primeira linha."
+                else:
+                    state_data["value"] = parsed["value"]
+                    state_data["description"] = parsed["description"]
+                    state_data["state"] = AWAITING_CATEGORY
+                    state_data["categories"] = categories
+                    user_states[From] = state_data
+                    
+                    options = "\n".join([f"{i+1}. {cat}" for i, cat in enumerate(categories)])
+                    reply = f"💰 R$ {parsed['value']:.2f} ({parsed['description']})\n\nEscolha a **categoria**:\n\n{options}\n\n(Responda com o número ou nome)"
 
         elif state_data["state"] == AWAITING_CATEGORY:
             categories = state_data["categories"]
