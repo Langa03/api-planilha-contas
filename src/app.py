@@ -109,22 +109,26 @@ def read_root():
 async def verify_webhook(request: Request):
     """
     Endpoint de verificação exigido pela Meta para configurar o Webhook.
-    Lê os parâmetros diretamente da URL para evitar erros de alias.
     """
     params = request.query_params
     hub_mode = params.get("hub.mode")
     hub_verify_token = params.get("hub.verify_token")
     hub_challenge = params.get("hub.challenge")
 
-    logger.info(f"Verificando Webhook: mode={hub_mode}, token={hub_verify_token}")
-    logger.info(f"Token esperado (env): {VERIFY_TOKEN}")
+    # Força o token que o usuário definiu se o ENV falhar
+    expected_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "api_contas_123")
 
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
-        logger.info("Webhook verificado com sucesso!")
-        return Response(content=hub_challenge)
+    logger.info(f"--- TENTATIVA DE VERIFICAÇÃO ---")
+    logger.info(f"Recebido do Facebook: {hub_verify_token}")
+    logger.info(f"Esperado pelo Servidor: {expected_token}")
+
+    if hub_mode == "subscribe" and (hub_verify_token == expected_token or hub_verify_token == "api_contas_123"):
+        logger.info("VERIFICAÇÃO BATEU! Respondendo ao Facebook...")
+        # A resposta DEVE ser apenas o challenge puro (texto simples)
+        return Response(content=hub_challenge, media_type="text/plain")
     
-    logger.warning(f"Falha na verificação. Recebido: {hub_verify_token}, Esperado: {VERIFY_TOKEN}")
-    return Response(content="Verificação falhou", status_code=403)
+    logger.warning("VERIFICAÇÃO FALHOU!")
+    return Response(content="Token Incorreto", status_code=403)
 
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
