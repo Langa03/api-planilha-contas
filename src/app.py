@@ -90,23 +90,21 @@ def get_sheet_layout():
     """
     try:
         data = sheets_client.get_all_values()
-        if not data:
-            logger.warning("Planilha vazia ou não acessível.")
+        if not data or len(data) < 3:
+            logger.warning("Planilha com poucas linhas ou não acessível.")
             return None, None
         
         # Log para depuração profunda
-        logger.info(f"Dados lidos da planilha (primeiras 3 linhas): {data[:3]}")
+        logger.info(f"Dados lidos da planilha (primeiras 4 linhas): {data[:4]}")
         
-        # Na sua planilha, a Linha 1 parece ser um título ('Despesas').
-        # As categorias reais (Moradia, Gasolina...) devem estar na Linha 2.
-        headers = [h.strip().upper() for h in data[1]] # Tenta a segunda linha
+        # Conforme o usuário, os nomes das categorias (Moradia, Gasolina...) estão na Linha 3 (Index 2).
+        headers = [h.strip().upper() for h in data[2]]
         
-        # Se a segunda linha também estiver vazia, tenta a primeira por desencargo
-        if not any(h for h in headers if h and h not in ["TOTAL", "MESES", "DESPESAS", ""]):
-            headers = [h.strip().upper() for h in data[0]]
+        # Se a linha 3 vier muito vazia, tenta a linha 2 por garantia
+        if len([h for h in headers if h]) < 2:
+            headers = [h.strip().upper() for h in data[1]]
 
         # Os meses estão na coluna A (index 0).
-        # Vamos filtrar para pegar apenas os nomes dos meses reais.
         valid_months = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
                         "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
         
@@ -115,7 +113,7 @@ def get_sheet_layout():
             if row and row[0].strip().upper() in valid_months:
                 months.append(row[0].strip().upper())
         
-        logger.info(f"Cabeçalhos identificados: {headers}")
+        logger.info(f"Cabeçalhos identificados (Linha 3): {headers}")
         logger.info(f"Meses identificados: {months}")
         
         return headers, months
