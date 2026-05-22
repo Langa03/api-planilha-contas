@@ -68,6 +68,8 @@ async def send_whatsapp_message(to: str, text: str):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, headers=headers, json=payload)
+            if response.status_code >= 400:
+                logger.error(f"Erro da Meta ({response.status_code}): {response.text}")
             response.raise_for_status()
             logger.info(f"Mensagem enviada para {to}")
         except Exception as e:
