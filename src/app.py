@@ -121,18 +121,24 @@ async def whatsapp_webhook(request: Request):
     try:
         payload = body.get("payload", {})
 
-        # Ignora mensagens enviadas pelo próprio bot
-        if payload.get("fromMe"):
-            return {"status": "ignored"}
-
-        from_number = payload.get("from", "")
+        from_me = payload.get("fromMe", False)
         message_body = payload.get("body", "").strip()
 
         if not message_body:
             return {"status": "ignored"}
 
+        # fromMe: pega o número do destinatário (a própria conversa)
+        if from_me:
+            from_number = payload.get("to", "").replace("@s.whatsapp.net", "@c.us")
+        else:
+            from_number = payload.get("from", "")
+
         # Gerenciamento de Estado
         state_data = user_states.get(from_number, {"state": None})
+
+        # Se fromMe e não está em fluxo ativo e não é /conta, ignora
+        if from_me and state_data["state"] is None and message_body.lower() != "/conta":
+            return {"status": "ignored"}
 
         # Trigger: só inicia o fluxo com /conta
         if state_data["state"] is None:
