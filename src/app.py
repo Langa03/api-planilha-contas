@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 # Adiciona o diretório raiz ao path para importar src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-app = FastAPI(title="API Financeira WhatsApp (Meta API)")
+app = FastAPI(title="API Financeira WhatsApp (Evolution API)")
 sheets_client = SheetsClient()
 
-# Configurações da Meta (Devem ser setadas no Render)
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "api_financeira_secret_123")
+# Configurações do WAHA
+WAHA_URL = os.getenv("WAHA_URL", "http://localhost:3000")
+WAHA_API_KEY = os.getenv("WAHA_API_KEY", "financeiro")
+WAHA_SESSION = os.getenv("WAHA_SESSION", "default")
 
 class Transaction(BaseModel):
     description: str
@@ -51,25 +51,24 @@ MONTHS_MAP = {
 
 async def send_whatsapp_message(to: str, text: str):
     """
-    Envia uma mensagem de texto usando a API do WhatsApp Cloud (Meta).
+    Envia uma mensagem de texto usando o WAHA.
     """
-    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
+    url = f"{WAHA_URL}/api/sendText"
     headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "X-Api-Key": WAHA_API_KEY,
         "Content-Type": "application/json",
     }
     payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {"body": text},
+        "session": WAHA_SESSION,
+        "chatId": to,
+        "text": text,
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, headers=headers, json=payload)
             if response.status_code >= 400:
-                logger.error(f"Erro da Meta ({response.status_code}): {response.text}")
+                logger.error(f"Erro do WAHA ({response.status_code}): {response.text}")
             response.raise_for_status()
             logger.info(f"Mensagem enviada para {to}")
         except Exception as e:
@@ -105,59 +104,51 @@ def get_sheet_layout():
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "API Financeira Meta está rodando!"}
-
-@app.get("/whatsapp")
-async def verify_webhook(request: Request):
-    """
-    Endpoint de verificação exigido pela Meta para configurar o Webhook.
-    """
-    params = request.query_params
-    hub_mode = params.get("hub.mode")
-    hub_verify_token = params.get("hub.verify_token")
-    hub_challenge = params.get("hub.challenge")
-
-    # Força o token que o usuário definiu se o ENV falhar
-    expected_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "api_contas_123")
-
-    logger.info(f"--- TENTATIVA DE VERIFICAÇÃO ---")
-    logger.info(f"Recebido do Facebook: {hub_verify_token}")
-    logger.info(f"Esperado pelo Servidor: {expected_token}")
-
-    if hub_mode == "subscribe" and (hub_verify_token == expected_token or hub_verify_token == "api_contas_123"):
-        logger.info("VERIFICAÇÃO BATEU! Respondendo ao Facebook...")
-        # A resposta DEVE ser apenas o challenge puro (texto simples)
-        return Response(content=hub_challenge, media_type="text/plain")
-    
-    logger.warning("VERIFICAÇÃO FALHOU!")
-    return Response(content="Token Incorreto", status_code=403)
+    return {"status": "ok", "message": "API Financeira Evolution API está rodando!"}
 
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     """
-    Recebe notificações da Meta (WhatsApp Cloud API).
+    Recebe notificações do WAHA (Webhook).
     """
     body = await request.json()
-    logger.info(f"Evento recebido da Meta: {body}")
+    logger.info(f"Evento recebido do WAHA: {body}")
 
     # Verifica se é uma mensagem válida
+    if body.get("event") != "message":
+        return {"status": "ignored", "event": body.get("event")}
+
     try:
-        entry = body.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
-        message = value.get("messages", [{}])[0]
-        
-        if not message:
+        payload = body.get("payload", {})
+
+        # Ignora mensagens enviadas pelo próprio bot
+        if payload.get("fromMe"):
             return {"status": "ignored"}
 
-        from_number = message.get("from")
-        message_body = message.get("text", {}).get("body", "").strip()
+        from_number = payload.get("from", "")
+        message_body = payload.get("body", "").strip()
 
         if not message_body:
             return {"status": "ignored"}
 
         # Gerenciamento de Estado
-        state_data = user_states.get(from_number, {"state": AWAITING_VALUE})
+        state_data = user_states.get(from_number, {"state": None})
+
+        # Trigger: só inicia o fluxo com /conta
+        if state_data["state"] is None:
+            if message_body.lower() == "/conta":
+                user_states[from_number] = {"state": AWAITING_VALUE}
+                state_data = user_states[from_number]
+                await send_whatsapp_message(from_number, "Olá! Vamos registrar uma transação. Envie o valor (ex: Lanche 25.50 ou Ganho Salário 3000).")
+                return {"status": "ok"}
+            else:
+                return {"status": "ignored"}
+
+        # Comando /cancelar em qualquer etapa
+        if message_body.lower() == "/cancelar":
+            user_states.pop(from_number, None)
+            await send_whatsapp_message(from_number, "Registro cancelado. Envie /conta para começar novamente.")
+            return {"status": "ok"}
         reply = ""
 
         if state_data["state"] == AWAITING_VALUE:
@@ -218,7 +209,7 @@ async def whatsapp_webhook(request: Request):
             current_month_name = MONTHS_MAP[datetime.now().month]
             
             try:
-                row_idx = months.index(current_month_name) + 4 # Offset conforme estrutura (Título + Vazio + Header = 3, data começa na 4)
+                row_idx = months.index(current_month_name) + 4 # Offset conforme estrutura
                 col_idx = headers.index(state_data["category"]) + 1
                 
                 new_total = sheets_client.update_cell_value(row_idx, col_idx, final_value)
